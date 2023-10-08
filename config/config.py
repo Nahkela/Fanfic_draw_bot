@@ -1,5 +1,6 @@
 from environs import Env
 from dataclasses import dataclass
+from aiogram.fsm.storage.memory import MemoryStorage
 
 
 @dataclass
@@ -11,6 +12,7 @@ class DataBase:
     def __init__(self, names=None):
         if names is None:
             self.names: dict = {}
+        self.storage = MemoryStorage()
 
 
 @dataclass

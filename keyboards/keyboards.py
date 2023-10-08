@@ -4,7 +4,7 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from lexicon.lexicon import LEXICON_RU
 
 
-#Создаём клавиатуру на начальный вопрос про жеребьёвку
+# Создаём клавиатуру на начальный вопрос про жеребьёвку
 yes_button: KeyboardButton = KeyboardButton(text=LEXICON_RU['agree_button'])
 no_button: KeyboardButton = KeyboardButton(text=LEXICON_RU['disagree_button'])
 

@@ -1,7 +1,8 @@
 from aiogram import Bot, Dispatcher
 import asyncio
 from config.config import load_config, Config
-from handlers import user_handlers, other_handlers, conditions_handler
+from handlers import register_handlers, other_handlers
+from menu.menu import set_main_menu
 
 
 async def main():
@@ -9,12 +10,12 @@ async def main():
 
     bot: Bot = Bot(token=config.tg_bot.token,
                    parse_mode='HTML')
-    dp: Dispatcher = Dispatcher()
+    dp: Dispatcher = Dispatcher(storage=config.database.storage)
 
-    dp.include_router(user_handlers.router)
-    dp.include_router(conditions_handler.router)
+    await set_main_menu(bot)
+
+    dp.include_router(register_handlers.router)
     dp.include_router(other_handlers.router)
-
 
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
