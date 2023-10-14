@@ -1,9 +1,8 @@
-from aiogram.types import Message
 from aiogram import Router
 from lexicon.lexicon import LEXICON_RU
 from Base.Base import user_db
-from aiogram.types import Message
-from aiogram.filters import Command, StateFilter, CommandStart
+from aiogram.types import Message, CallbackQuery
+from aiogram.filters import Command, CommandStart
 
 router = Router()
 
@@ -18,6 +17,7 @@ async def process_showdata_command(message: Message):
                     f'Возраст: {user_db[message.from_user.id]["age"]}\n'
                     f'Пол: {user_db[message.from_user.id]["gender"]}\n'
         )
+
     else:
         # Если анкеты пользователя в базе нет - предлагаем заполнить
         await message.answer(
@@ -30,8 +30,15 @@ async def process_showdata_command(message: Message):
 async def process_start_command(message: Message):
     await message.answer(text=LEXICON_RU['start_false'])
 
+
 @router.message()
 async def send_answer(message: Message):
     await message.answer(text=LEXICON_RU['other_messages'])
+
+
+@router.callback_query()
+async def send_answer(callback: CallbackQuery):
+    await callback.message.answer(text=LEXICON_RU['other_messages'])
+    await callback.answer()
 
 

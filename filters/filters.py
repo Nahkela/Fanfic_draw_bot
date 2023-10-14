@@ -1,14 +1,24 @@
 from aiogram.filters import BaseFilter
 from aiogram.types import Message
-from Base.Base import states
+from Base.Base import states, user_db
+
+
+class RegisterTry(BaseFilter):
+
+    async def __call__(self, message: Message):
+        return message.text != '/register'
 
 
 class IsInBase(BaseFilter):
-    def __init__(self, user_ids):
-        self.user_ids = user_ids
+    def __init__(self, mode=True):
+        self.user_ids = user_db
+        self.mode = mode
 
     async def __call__(self, message: Message):
-        return message.from_user.id not in self.user_ids.keys()
+        if self.mode is True:
+            return message.from_user.id in self.user_ids.keys()
+        else:
+            return message.from_user.id not in self.user_ids.keys()
 
 
 class MoreInBase(BaseFilter):

@@ -1,17 +1,18 @@
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, PhotoSize
 from aiogram.fsm.state import default_state
-from aiogram.filters import CommandStart, Command, StateFilter
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.storage.redis import RedisStorage, Redis
 from aiogram.fsm.context import FSMContext
 from FSMClasses.fsmclasses import FSMFillform
 from lexicon.lexicon import LEXICON_RU
 from filters.fsmfilters import is_name_correct, is_age_correct
-from keyboards.inline_kb_maker import inline_keyboard_maker
+from keyboards.kb_maker import inline_keyboard_maker
 from Base.Base import user_db
+from filters.filters import IsInBase, RegisterTry
 
 router = Router()
-router.message.filter(lambda x: x.from_user.id not in user_db)
+router.message.filter(IsInBase(False))
 
 
 # Этот хэндлер будет срабатывать на команду "/cancel" в состоянии
@@ -34,18 +35,6 @@ async def process_cancel_command_state(message: Message, state: FSMContext):
     )
     # Сбрасываем состояние и очищаем данные, полученные внутри состояний
     await state.clear()
-
-
-# Приветствие с пользованием, маленькое представление, что из себя представляет бот
-@router.message(CommandStart(), StateFilter(default_state))
-async def process_start_command(message: Message):
-    await message.answer(text=LEXICON_RU['start'])
-
-
-# Описание команд бота, более подробное объяснение
-@router.message(Command(commands='help'), StateFilter(default_state))
-async def process_start_command(message: Message):
-    await message.answer(text=LEXICON_RU['help'])
 
 
 # Регистрация пользователя, вхождение в машину состояний, заполнение анкеты
@@ -99,10 +88,9 @@ async def process_start_command(callback: CallbackQuery, state: FSMContext):
 
 
 # Хэндлер если гендер был выбран не среди кнопок
-@router.callback_query(StateFilter(FSMFillform.fill_gender))
-async def process_start_command(callback: CallbackQuery):
-    await callback.message.answer(text=LEXICON_RU['filled_gender_false'])
-    await callback.answer()
+@router.message(StateFilter(FSMFillform.fill_gender))
+async def process_start_command(message: Message):
+    await message.answer(text=LEXICON_RU['filled_gender_false'])
 
 
 # Хэндлер если было загружено фото
@@ -112,7 +100,9 @@ async def process_start_command(message: Message, state: FSMContext, largest_pho
         photo_id=largest_photo.file_id,
         photo_unique_id=largest_photo.file_unique_id
     )
-    user_db[message.from_user.id] = await state.get_data()
+    time_dick = await state.get_data()   # Получаем данные с машины состояний
+    user_db.setdefault(message.from_user.id, {}).update(time_dick)# Обновляем наш словарь юзера
+    user_db[message.from_user.id].update({'modes': {}})
     await message.answer(text=LEXICON_RU['uploaded_photo'])
     await state.clear()
 
@@ -123,21 +113,7 @@ async def process_start_command(message: Message, state):
     await message.answer(text=LEXICON_RU['uploaded_photo_fail'])
 
 
-# Этот хэндлер будет срабатывать на отправку команды /showdata
-# и отправлять в чат данные анкеты, либо сообщение об отсутствии данных
-@router.message(Command(commands='showdata'), StateFilter(default_state))
-async def process_showdata_command(message: Message):
-    # Отправляем пользователю анкету, если она есть в "базе данных"
-    if message.from_user.id in user_db:
-        await message.answer_photo(
-            photo=user_db[message.from_user.id]['photo_id'],
-            caption=f'Имя: {user_db[message.from_user.id]["name"]}\n'
-                    f'Возраст: {user_db[message.from_user.id]["age"]}\n'
-                    f'Пол: {user_db[message.from_user.id]["gender"]}\n'
-        )
-    else:
-        # Если анкеты пользователя в базе нет - предлагаем заполнить
-        await message.answer(
-            text='Вы еще не заполняли анкету. Чтобы приступить - '
-            'отправьте команду /register'
-        )
+# Для тех, кто хочет сделать что-либо до регистрации
+@router.message()
+async def process_register_warning_command(message: Message):
+    await message.answer(text=LEXICON_RU['register_warning'])
