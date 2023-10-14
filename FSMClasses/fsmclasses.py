@@ -16,4 +16,5 @@ class FSMInitDrawing(StatesGroup):
     fill_genres_count = State()
     fill_conditions_count = State()
     invite_guests = State()
+    stop_requit = State()
 

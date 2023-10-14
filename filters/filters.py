@@ -1,6 +1,7 @@
 from aiogram.filters import BaseFilter
 from aiogram.types import Message
 from Base.Base import states, user_db
+from aiogram.fsm.context import FSMContext
 
 
 class RegisterTry(BaseFilter):

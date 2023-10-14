@@ -101,8 +101,8 @@ async def process_start_command(message: Message, state: FSMContext, largest_pho
         photo_unique_id=largest_photo.file_unique_id
     )
     time_dick = await state.get_data()   # Получаем данные с машины состояний
-    user_db.setdefault(message.from_user.id, {}).update(time_dick)# Обновляем наш словарь юзера
-    user_db[message.from_user.id].update({'modes': {}})
+    user_db.setdefault(message.from_user.id, {}).update(time_dick)  # Обновляем наш словарь юзера
+    user_db[message.from_user.id].update({'modes': {}, 'chat_id': message.chat.id})  # Добавим строку модов и id чата, где это всё происходит
     await message.answer(text=LEXICON_RU['uploaded_photo'])
     await state.clear()
 
