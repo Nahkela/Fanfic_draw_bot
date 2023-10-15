@@ -109,7 +109,7 @@ async def process_start_command(message: Message, state: FSMContext, largest_pho
 
 # Хэндлер если было загружено не фото
 @router.message(StateFilter(FSMFillform.upload_photo))
-async def process_start_command(message: Message, state):
+async def process_start_command(message: Message):
     await message.answer(text=LEXICON_RU['uploaded_photo_fail'])
 
 

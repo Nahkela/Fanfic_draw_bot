@@ -3,7 +3,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from lexicon.lexicon import LEXICON_RU
 
 
-def inline_keyboard_maker(width, *args) -> InlineKeyboardMarkup:
+def inline_keyboard_maker(width, *args, **kwargs) -> InlineKeyboardMarkup:
     kb_builder: InlineKeyboardBuilder = InlineKeyboardBuilder()
     buttons = []
     if args:
@@ -14,6 +14,12 @@ def inline_keyboard_maker(width, *args) -> InlineKeyboardMarkup:
                     callback_data=name
                 )
             )
-    kb_builder.row(*buttons)
-    return kb_builder.as_markup(width=width)
+    if kwargs:
+        for callback, name in kwargs.items():
+            buttons.append(InlineKeyboardButton(
+                text=name,
+                callback_data=callback
+            ))
+    kb_builder.row(*buttons, width=width)
+    return kb_builder.as_markup()
 
