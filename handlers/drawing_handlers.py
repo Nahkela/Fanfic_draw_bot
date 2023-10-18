@@ -1,34 +1,23 @@
 from copy import deepcopy
 from aiogram import Router, F
 from lexicon.lexicon import LEXICON_RU, LEXICON_GENRES
-from Base.Base import user_db, draw_rooms, states, draw_rooms_story, drawing_options
-from aiogram.types import Message, CallbackQuery
-from aiogram.filters import Command, StateFilter
+from Base.Base import user_db, draw_rooms, states, draw_rooms_story, drawing_options, all_genres
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup
+from aiogram.filters import Command, StateFilter, or_f
 from keyboards.kb_maker import inline_keyboard_maker
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import default_state
 from FSMClasses.fsmclasses import FSMInitDrawing
-from services.services import key_generator
+from services.services import key_generator, generate
 from aiogram import Bot
 
 
 router = Router()
 
 
-@router.message(Command(commands='cancel_draw'), ~StateFilter(default_state))
-async def process_cancel_draw_command(message: Message, state: FSMContext, bot: Bot):
-    room_key = await state.get_data()
-    if 'key' in room_key:
-        betrayer = draw_rooms[room_key['key']]['play_ids'].pop(str(message.from_user.id))
-        for user in draw_rooms[room_key['key']]['play_ids']:
-            await bot.send_message(text=f"{user_db[betrayer]['name']}",
-                                   chat_id=user)
-    await message.answer(LEXICON_RU['draw_exit'])
-    await state.set_state(default_state)
-
-
 @router.message(Command(commands='drawing'), StateFilter(default_state))
 async def process_start_drawing_command(message: Message, state: FSMContext):
+    await state.clear()
     user_db[message.from_user.id]['modes']['drawing'] = deepcopy(drawing_options)
     await message.answer(text=LEXICON_RU['start_drawing'],
                          reply_markup=inline_keyboard_maker(
@@ -37,6 +26,45 @@ async def process_start_drawing_command(message: Message, state: FSMContext):
                              'guest'
                          ))
     await state.set_state(FSMInitDrawing.draw_started)
+
+router.message(lambda x: user_db[x.from_user.id]['drawing'])
+
+
+@router.message(Command(commands='cancel_draw'), StateFilter(FSMInitDrawing.the_end))
+async def process_cancel_draw_command(message: Message, state: FSMContext):
+    room = await state.get_data()
+    await message.answer(LEXICON_RU['too_late'])
+    await draw_rooms[room['key']]['over'].add(message.from_user.id)
+
+
+@router.message(Command(commands='cancel_draw'), StateFilter(FSMInitDrawing.draw_started,
+                                                             FSMInitDrawing.fill_guest_key,
+                                                             FSMInitDrawing.fill_genres_count,
+                                                             FSMInitDrawing.fill_conditions_count),
+                lambda x: user_db[x.from_user.id]['modes']['drawing']['is_initiator'])
+async def process_cancel_draw_command(message: Message, state: FSMContext):
+    await message.delete()
+    user_db[message.from_user.id]['modes']['drawing'] = False
+    room = await state.get_data()
+    del draw_rooms[room['key']]
+    await state.set_state(default_state)
+    await message.answer(text=LEXICON_RU['draw_exit'])
+
+
+@router.message(Command(commands='cancel_draw'), ~StateFilter(default_state))
+async def process_cancel_draw_command(message: Message, state: FSMContext, bot: Bot):
+    room_key = await state.get_data()
+    if 'key' in room_key:
+        betrayer = message.from_user.id
+        draw_rooms[room_key['key']]['play_ids'].discard(message.from_user.id)
+        for user in draw_rooms[room_key['key']]['play_ids']:
+            await bot.send_message(text=f"{user_db[betrayer]['name']}{' betrayed us'}",
+                                   chat_id=user)
+
+        user_db[message.from_user.id]['modes']['drawing'] = False
+
+    await message.answer(LEXICON_RU['draw_exit'])
+    await state.set_state(default_state)
 
 
 # Обработка нажатия на кнопку Инициатор, предложение количества жанров
@@ -56,7 +84,7 @@ async def process_initiator_command(callback: CallbackQuery, state: FSMContext):
     draw_rooms[key].update({'owner': callback.from_user.id})
     user_db[callback.from_user.id]['modes']['drawing']['is_initiator'] = True
     user_db[callback.from_user.id]['modes']['drawing']['time_id_key'] = key
-
+    user_db[callback.from_user.id]['modes']['drawing']['genres'] = deepcopy([genre for genre in all_genres])
     await state.set_state(FSMInitDrawing.fill_genres_count)
     await callback.answer()
 
@@ -102,7 +130,7 @@ async def process_fail_fill_key_command(message: Message):
 async def process_genres_sent(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         text=LEXICON_RU['chosen_genres_count'],
-        reply_markup=inline_keyboard_maker(3, '1', '2', '3', 'no_condions')
+        reply_markup=inline_keyboard_maker(3, '1', '2', '3', 'no_conditions')
     )
     # Увы, по другому забрать по ключу 'key' не получится, так что вот надо так страдать
     # из кода в код, что поделать. Хотя может просто я тупой
@@ -155,6 +183,8 @@ async def process_genres_sent(message: Message):
 async def process_stop_requit_command(callback: CallbackQuery, bot: Bot, state: FSMContext):
     room_key = await state.get_data()
     if draw_rooms[room_key['key']]['play_ids']:
+        await state.update_data(players_id=list(draw_rooms[room_key['key']]['play_ids']))
+        await state.update_data(players_id=list(draw_rooms[room_key['key']]['play_ids']))
         await callback.message.delete()
         draw_rooms[room_key['key']]['play_ids'].add(callback.from_user.id)
         keyboard = inline_keyboard_maker(3, **{str(x[0]): x[1] for x in map(lambda x: (x, user_db[x]['name']), draw_rooms[room_key['key']]['play_ids'])})
@@ -174,25 +204,58 @@ async def pizdezh_command(callback: CallbackQuery):
     await callback.answer(text='Не пизди')
 
 
-@router.callback_query(StateFilter(FSMInitDrawing.stop_requit))
-async def process_prev_victim_command(callback: CallbackQuery, state: FSMContext):
+@router.callback_query(StateFilter(FSMInitDrawing.stop_requit), F.data == 'wrong')
+async def process_prev_victim_wrong(callback: CallbackQuery, state: FSMContext):
+    await callback.message.delete()
     room_key = await state.get_data()
-    modes = {'genres_counts': (FSMInitDrawing.set_prev_genre, {'text': LEXICON_RU['choose_prev_genres'],
-                                                               'reply_markup': inline_keyboard_maker(3, **LEXICON_GENRES)
+    keyboard = inline_keyboard_maker(3, **{str(x[0]): x[1] for x in map(lambda x: (x, user_db[x]['name']), draw_rooms[room_key['key']]['play_ids'])})
+    await callback.message.answer(text=LEXICON_RU['begin_main_drawing'],
+                                  reply_markup=keyboard
+                                  )
+    await callback.answer()
+
+
+@router.callback_query(StateFilter(FSMInitDrawing.stop_requit), F.data == 'right')
+async def process_prev_victim_command(callback: CallbackQuery, state: FSMContext):
+    room = await state.get_data()
+    # ВНИМАНИЕ, к чему это здесь расписано, я сделал итератор из режимов и текстов к ним
+    # За тем, чтоб состояния активировались те, что нужны, чтоб действовали только нужные хендлеры
+    # Если например жанров не будет, то состояние выберется исходя из того есть другие режимы или нет
+    # Например, если Условия нужно задавать, то в итераторе они появятся, текст будет относиться к условиям и состояние
+    # Будет set_conditions. Так мы можем сколько угодно режимов добавлять, вообще нет проблем, если они будут выбраны
+    # Инициатором или нет
+    # Итератор был заменён на список, в будущем все равно поменяю на итератор
+
+    modes: dict[str, tuple[FSMInitDrawing, dict[str, dict | InlineKeyboardMarkup]]] = \
+            {'genres_counts': (FSMInitDrawing.set_prev_genre, {'text': LEXICON_RU['choose_prev_genres'], 'reply_markup': inline_keyboard_maker(3, **LEXICON_GENRES)
                                                                }
                                ),
              'conditions_counts': (FSMInitDrawing.set_new_conditions, {'text': LEXICON_RU['set_conditions']}),
              }
-    user_db[callback.from_user.id]['modes']['drawing']['needed_states'] = iter([mode for name,
-                                                                mode in modes.items()
-                                                       if draw_rooms[room_key['key']][name]]
-                                                                    + [(FSMInitDrawing.the_end,
-                                                                        {'text': LEXICON_RU['the_end']})])
-    # Сохраняет человека в список предыдущих людишек
-    user_db[callback.from_user.id]['modes']['drawing']['prev_victim'] = callback.data
-    stating, message_text = next(user_db[callback.from_user.id]['modes']['drawing']['needed_states'])
-    await callback.message.edit_text(**message_text)
+    handlers_modes = [mode for name, mode in modes.items() if draw_rooms[room['key']][name]]
+    final_decision = (FSMInitDrawing.the_end, {'text': LEXICON_RU['almost_end'], 'reply_markup': inline_keyboard_maker(1, 'quit')})
+
+    handlers_modes.append(final_decision)
+    await state.update_data(needed_states=handlers_modes)
+    stating, message_text = handlers_modes[user_db[callback.from_user.id]['modes']['drawing']['step']]
+    user_db[callback.from_user.id]['modes']['drawing']['step'] += 1
+    await callback.message.delete()
+    await callback.message.answer(**message_text)
     await state.set_state(stating)
+
+
+@router.callback_query(StateFilter(FSMInitDrawing.stop_requit))
+async def process_check_id_process(callback: CallbackQuery, state: FSMContext):
+    await callback.message.delete()
+    # Сохраняет человека в список предыдущих людишек, перезапишет, если вдруг человек оказался не тот
+    await state.update_data(prev_victim=int(callback.data))
+    await callback.message.answer_photo(
+            photo=user_db[callback.from_user.id]['photo_id'],
+            caption=f'Имя: {user_db[int(callback.data)]["name"]}\n'
+                    f'Возраст: {user_db[int(callback.data)]["age"]}\n'
+                    f'Пол: {user_db[int(callback.data)]["gender"]}\n',
+            reply_markup=inline_keyboard_maker(2, 'right', 'wrong')
+    )
 
 
 @router.message(StateFilter(FSMInitDrawing.stop_requit))
@@ -200,9 +263,14 @@ async def process_prev_victim_fail(message: Message):
     await message.answer(LEXICON_RU['fail_button'])
 
 
-@router.callback_query(StateFilter(FSMInitDrawing.set_prev_genre), F.data == 'thats_all')
+@router.callback_query(StateFilter(FSMInitDrawing.set_prev_genre),
+                       or_f(F.data == 'thats_all', lambda x: len(user_db[x.from_user.id]['modes']['drawing']['prev_genders']) == 2))
 async def process_filled_genres_command(callback: CallbackQuery, state: FSMContext):
-    stating, message_text = next(user_db[callback.from_user.id]['modes']['drawing']['needed_states'])
+    if callback.data != 'thats_all':
+        user_db[callback.from_user.id]['modes']['drawing']['prev_genders'].append(callback.data)
+    room_key = await state.get_data()
+    stating, message_text = room_key['needed_states'][user_db[callback.from_user.id]['modes']['drawing']['step']]
+    user_db[callback.from_user.id]['modes']['drawing']['step'] += 1
     await callback.message.edit_text(**message_text)
     await state.set_state(stating)
 
@@ -222,18 +290,51 @@ async def cancel_condey_command(message: Message):
 @router.message(StateFilter(FSMInitDrawing.set_new_conditions),
                 lambda x: len(x.text) <= 300)
 async def process_fill_conditions(message: Message, state: FSMContext):
+    room = await state.get_data()
     conds = user_db[message.from_user.id]['modes']['drawing']['set_conditions']
     conds.append(message.text)
+    draw_rooms[room['key']]['all_conditions'].append(message.text)
 
-    room_key = await state.get_data()
-    if len(conds) >= draw_rooms[room_key['key']]['conditions_counts']:
-        stating, message_text = next(user_db[message.from_user.id]['modes']['drawing']['needed_states'])
-        await message.answer(**message_text)
-        await state.set_state(stating)
+    if len(conds) >= draw_rooms[room['key']]['conditions_counts']:
+        await message.answer(text=LEXICON_RU['check'],
+                             reply_markup=inline_keyboard_maker(1, 'agree_button'))
     else:
         await message.answer(text=LEXICON_RU['more'])
 
 
+@router.callback_query(StateFilter(FSMInitDrawing.set_new_conditions), F.data == 'agree_button')
+async def process_accept_conditions_command(callback: CallbackQuery, state: FSMContext):
+    await callback.message.delete()
+    room_key = await state.get_data()
+    stating, message_text = room_key['needed_states'][user_db[callback.from_user.id]['modes']['drawing']['step']]
+    user_db[callback.from_user.id]['modes']['drawing']['step'] += 1
+    await callback.message.answer(**message_text)
+    await state.set_state(stating)
+    await callback.answer()
+
+
+@router.message(StateFilter(FSMInitDrawing.set_new_conditions))
+async def process_fill_cond_fail(message: Message):
+    await message.answer(text=LEXICON_RU['too_long'])
+
+
 @router.message(StateFilter(FSMInitDrawing.the_end))
 async def process_end_command(message: Message, state: FSMContext):
-    await message.answer(text='пошёл на хуй')
+    await message.answer(LEXICON_RU['press_the_button'])
+
+
+@router.callback_query(StateFilter(FSMInitDrawing.the_end), F.data == 'quit')
+async def process_quit_command(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    await state.set_state(default_state)
+    await callback.message.edit_text(text=callback.message.text)
+    room = await state.get_data()
+    draw_rooms[room['key']]['over'].add(callback.from_user.id)
+    if draw_rooms[room['key']]['over'] == draw_rooms[room['key']]['play_ids']:
+        modes = list(filter(lambda mode: draw_rooms[room['key']][mode], ['genres_counts', 'conditions_counts']))  # Потом переделаю в норм функцию, нужны те моды, которые у нас были задействованы
+        for user_id in sorted(draw_rooms[room['key']]['play_ids'], key=lambda x: user_db[x]['modes']['drawing']['prev_victim']):
+            await bot.send_photo(photo=user_db[user_id]['photo_id'],
+                                 caption=f"{generate(draw_rooms[room['key']], user_id, *modes)}\n{LEXICON_RU['the_end']}",  # Здесь результаты будут в будущем
+                                 chat_id=user_id)
+        for user in draw_rooms[room['key']]['play_ids']:
+            user_db[user]['modes']['drawing'] = False
+        del draw_rooms[room['key']]
