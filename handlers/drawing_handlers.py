@@ -15,11 +15,11 @@ from aiogram.exceptions import TelegramBadRequest
 router = Router()
 
 
-@router.message(Command(commands='drawing'))
+@router.message(Command(commands='drawing'), StateFilter(default_state))
 async def process_start_drawing_command(message: Message, state: FSMContext):
     await state.clear()
     user_db[message.from_user.id]['modes']['drawing'] = deepcopy(drawing_options)
-    await message.answer(text=LEXICON_RU['start_drawing'],
+    user_db[message.from_user.id]['last_callback'] = await message.answer(text=LEXICON_RU['start_drawing'],
                          reply_markup=inline_keyboard_maker(
                              4,
                              'initiator',
@@ -39,6 +39,10 @@ router.message(lambda x: user_db[x.from_user.id]['drawing'])
 async def process_cancel_draw_command_3(message: Message, state: FSMContext, bot: Bot):
     room = await state.get_data()
     for user in draw_rooms[room['key']]['play_ids']:
+        try:
+            await user_db[user]['last_callback'].delete()
+        except (TelegramBadRequest, KeyError, AttributeError):
+            print('Удалять нечего')
         await bot.send_message(text=LEXICON_RU['empty_room'],
                                chat_id=user)
         user_db[user]['modes']['drawing'] = False
@@ -74,7 +78,7 @@ async def process_cancel_draw_command(message: Message, state: FSMContext):
 async def process_cancel_draw_command_1(message: Message, state: FSMContext):
     try:
         await user_db[message.from_user.id]['last_callback'].delete()
-    except TelegramBadRequest:
+    except (TelegramBadRequest, KeyError, AttributeError):
         print('Удалять нечего')
     user_db[message.from_user.id]['modes']['drawing'] = False
     room = await state.get_data()
@@ -87,7 +91,7 @@ async def process_cancel_draw_command_1(message: Message, state: FSMContext):
 async def process_cancel_draw_command_2(message: Message, state: FSMContext, bot: Bot):
     try:
         await user_db[message.from_user.id]['last_callback'].delete()
-    except TelegramBadRequest:
+    except (TelegramBadRequest, KeyError, AttributeError):
         print('Удалять нечего')
     room_key = await state.get_data()
     if 'key' in room_key:
