@@ -5,6 +5,7 @@ user_db = {197232933: {'name': 'Алихан', 'age': '23', 'gender': 'Мужч�
 }
 states: dict[str, [int, list]] = {'play_ids': set(),
                                   'steps': 0,
+                                  'room_id': None,
                                   'genres': list(),
                                   'all_conditions': list(),
                                   'names_count': 0,
@@ -18,11 +19,14 @@ states: dict[str, [int, list]] = {'play_ids': set(),
 
 drawing_options = {'is_initiator': False,
                    'time_id_key': False,
+                   'owner': False,
                    'prev_victim': 0,
                    'prev_genders': list(),
                    'set_conditions': list(),
                    'needed_states': list(),
                    'step': 0,
+                   'last_callback': None,
+                   'state': None
                    }
 draw_rooms: dict[str, dict[str, [int, list]]] = {}
 draw_rooms_story = {}
