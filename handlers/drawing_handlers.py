@@ -302,7 +302,7 @@ async def process_check_id_process(callback: CallbackQuery, state: FSMContext):
     # Сохраняет человека в список предыдущих людишек, перезапишет, если вдруг человек оказался не тот
     await state.update_data(prev_victim=int(callback.data))
     user_db[callback.from_user.id]['last_callback'] = await callback.message.answer_photo(
-            photo=user_db[callback.from_user.id]['photo_id'],
+            photo=user_db[int(callback.data)]['photo_id'],
             caption=f'Имя: {user_db[int(callback.data)]["name"]}\n'
                     f'Возраст: {user_db[int(callback.data)]["age"]}\n'
                     f'Пол: {user_db[int(callback.data)]["gender"]}\n',
