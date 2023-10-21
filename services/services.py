@@ -19,7 +19,10 @@ def generate(states, user_id, *args):
 
     dick = {}
     ids = list(states['play_ids'])
-    dick['victim'] = choice(list(filter(lambda x: x not in states['already_chosen'], ids)))
+    ids.remove(user_id)
+    wrong_variants = states['already_chosen'] + user_db[user_id]['modes']['drawing']['prev_victim']
+    dick['victim'] = choice(list(filter(lambda x: x not in wrong_variants, ids)))
+    user_db[user_id]['modes']['drawing']['new_victim'] = dick['victim']
     states['already_chosen'].append(dick['victim'])
     for mode in args:
         if mode == 'genres_counts':
@@ -32,9 +35,11 @@ def generate(states, user_id, *args):
             states['already_used_genres'].extend(dick['genres'])
         if mode == 'conditions_counts':
             quantity = states['conditions_counts']
-            wrong_variants = user_db[user_id]['modes']['drawing']['set_conditions'] + states['already_used_conditions']
-            sequence = [cond for cond in states['all_conditions'] if cond not in wrong_variants]
-            dick['conditions'] = sample(sequence, quantity)
-            states['already_used_conditions'].extend(dick['conditions'])
+            ids.sort(key=lambda x: len(user_db[x]['modes']['drawing']['set_conditions']), reverse=True)
+            counter = 0
+            dick['conditions'] = []
+            for user_cond in ids:
+                n = user_db[user_cond]['modes']['drawing']['set_conditions'].pop(0)
+                dick['conditions'].append(n)
     return dick
 
