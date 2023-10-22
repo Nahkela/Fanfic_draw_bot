@@ -392,7 +392,7 @@ async def process_quit_command(callback: CallbackQuery, state: FSMContext, bot: 
     if draw_rooms[room['key']]['over'] == draw_rooms[room['key']]['play_ids']:
         modes = list(filter(lambda mode: draw_rooms[room['key']][mode], ['genres_counts', 'conditions_counts']))  # Потом переделаю в норм функцию, нужны те моды, которые у нас были задействованы
         for user_id in sorted(draw_rooms[room['key']]['play_ids'], key=lambda x: user_db[x]['modes']['drawing']['prev_victim']):
-            text = f"{generate(draw_rooms[room['key']], user_id, *modes)}\n{LEXICON_RU['the_end']}"
+            text = f"{generate(draw_rooms[room['key']], user_id, *modes)}"
             await bot.send_photo(photo=user_db[user_id]['modes']['drawing']['new_victim'],
                                  caption=text,  # Здесь результаты будут в будущем
                                  chat_id=user_id)

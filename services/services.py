@@ -22,7 +22,7 @@ def generate(states, user_id, *args):
     ids.remove(user_id)
     wrong_variants = states['already_chosen'] + user_db[user_id]['modes']['drawing']['prev_victim']
     dick['victim'] = choice(list(filter(lambda x: x not in wrong_variants, ids)))
-    user_db[user_id]['modes']['drawing']['new_victim'] = dick['victim']
+    user_db[user_id]['modes']['drawing']['new_victim'] = user_db[dick['victim']]['photo_id']
     states['already_chosen'].append(dick['victim'])
     for mode in args:
         if mode == 'genres_counts':
@@ -38,8 +38,12 @@ def generate(states, user_id, *args):
             ids.sort(key=lambda x: len(user_db[x]['modes']['drawing']['set_conditions']), reverse=True)
             counter = 0
             dick['conditions'] = []
-            for user_cond in ids:
-                n = user_db[user_cond]['modes']['drawing']['set_conditions'].pop(0)
-                dick['conditions'].append(n)
+            while counter < quantity:
+                for user_cond in ids:
+                    n = user_db[user_cond]['modes']['drawing']['set_conditions'].pop(0)
+                    dick['conditions'].append(n)
+                    counter += 1
+                    if counter >= quantity:
+                        break
     return dick
 
